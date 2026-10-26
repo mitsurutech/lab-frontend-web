@@ -1,0 +1,386 @@
+# Front-end web: a small page of HTML, CSS and JavaScript of your own, edited in JupyterLab and
+# shown live beside it, with Python scripts that read the page and say what it is made of.
+#
+# Your copy is the only thing you may use, and it is the only thing you can reach: this lab
+# has no way out to the internet, so nothing you try can touch anybody else's machine.
+# Never point a tool at a site you do not own, in a lab or anywhere else.
+#
+# Two links open from the lab's page. The first, JupyterLab, is your workbench: open the folder
+# site/ and double-click index.html, style.css or app.js to edit them. The second, Preview, is
+# the page itself, served from that folder: reload it after you save. The work folder also holds
+# start.ipynb and steps/, short scripts that read the page and print what they find. The
+# terminal beside the lab reaches the same Python with docker exec, for example
+#   docker exec jupyter python3 steps/tags.py
+#
+# Hand in your own version of the page (the three files from site/, downloaded from JupyterLab
+# with File, Download) and a sentence on one change you made and what it did.
+#
+# The image runs as its own unprivileged account and needs no capabilities. JupyterLab asks
+# for no token, because the platform's own door in front of it already knows who you are; do
+# not run it like this anywhere else. Nothing is saved: download your files before you stop
+# the lab, because stopping it forgets every file you made.
+
+services:
+  jupyter:
+    image: jupyter/scipy-notebook:2023-10-20
+    user: "1000:100"
+    expose: ["8888", "8000"]
+    working_dir: /home/jovyan/work
+    environment:
+      HOME: /home/jovyan
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /home/jovyan/work /tmp/lab
+        cat > /tmp/lab/make.py <<'PY'
+        import json, os
+
+        # The page: written from fixed text, nothing downloaded, the same every time.
+        files = {}
+        files["index.html"] = r'''<!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Lunch menu</title>
+          <link rel="stylesheet" href="style.css">
+        </head>
+        <body>
+          <header>
+            <h1>Lunch menu</h1>
+            <nav>
+              <a href="#dishes">Dishes</a>
+              <a href="#find">Find a dish</a>
+              <a href="#theme">Theme</a>
+            </nav>
+          </header>
+          <main>
+            <section id="dishes">
+              <h2>Today's dishes</h2>
+              <ul id="dish-list">
+                <li class="dish vegetarian">Tomato soup</li>
+                <li class="dish">Chicken and rice</li>
+                <li class="dish vegetarian">Bean chilli</li>
+                <li class="dish">Fish pie</li>
+                <li class="dish vegetarian">Cheese and tomato pizza</li>
+              </ul>
+              <p id="count">5 dishes shown</p>
+            </section>
+            <section id="find">
+              <h2>Find a dish</h2>
+              <form id="find-form">
+                <label for="word">Word to look for</label>
+                <input id="word" type="text">
+                <button type="submit">Filter</button>
+              </form>
+            </section>
+            <section id="theme">
+              <h2>Theme</h2>
+              <button id="theme-button" type="button">Dark theme</button>
+            </section>
+          </main>
+          <footer>
+            <a href="app.js">The script that runs this page</a>
+            <a href="https://example.org/notes">Menu notes</a>
+          </footer>
+          <script src="app.js"></script>
+        </body>
+        </html>
+        '''
+        files["style.css"] = r'''/* Colours are kept in one place, as custom properties. */
+        :root {
+          --bg: #fffdf5;
+          --text: #222222;
+          --accent: #b3402a;
+        }
+        body {
+          font-family: sans-serif;
+          margin: 0;
+          background: var(--bg);
+          color: var(--text);
+        }
+        body.dark {
+          --bg: #1d1d1f;
+          --text: #f2f2f2;
+          --accent: #ff9b7a;
+        }
+        header {
+          padding: 1rem 1.5rem;
+          border-bottom: 4px solid var(--accent);
+        }
+        h1 {
+          margin: 0 0 0.5rem;
+        }
+        nav a {
+          margin-right: 1rem;
+          color: var(--accent);
+        }
+        main {
+          max-width: 40rem;
+          margin: 0 auto;
+          padding: 1rem 1.5rem;
+        }
+        section {
+          margin-bottom: 1.5rem;
+        }
+        h2 {
+          color: var(--accent);
+        }
+        ul {
+          padding: 0;
+          list-style: none;
+        }
+        .dish {
+          padding: 0.5rem 0.75rem;
+          margin-bottom: 0.5rem;
+          border: 1px solid var(--accent);
+          border-radius: 6px;
+        }
+        .dish.vegetarian {
+          border-left-width: 8px;
+        }
+        .dish.hidden {
+          display: none;
+        }
+        input, button {
+          font: inherit;
+          padding: 0.4rem 0.6rem;
+        }
+        button {
+          background: var(--accent);
+          color: var(--bg);
+          border: 0;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+        footer {
+          padding: 1rem 1.5rem;
+          font-size: 0.9rem;
+        }
+        footer a {
+          margin-right: 1rem;
+          color: var(--accent);
+        }
+        '''
+        files["app.js"] = r'''// This page uses the DOM and nothing else: no library, no network.
+        var dishes = document.querySelectorAll(".dish");
+        var count = document.getElementById("count");
+        var form = document.getElementById("find-form");
+        var word = document.getElementById("word");
+        var themeButton = document.getElementById("theme-button");
+
+        function filterDishes(text) {
+          var shown = 0;
+          var wanted = text.trim().toLowerCase();
+          for (var i = 0; i < dishes.length; i++) {
+            var match = dishes[i].textContent.toLowerCase().indexOf(wanted) !== -1;
+            dishes[i].classList.toggle("hidden", !match);
+            if (match) {
+              shown = shown + 1;
+            }
+          }
+          count.textContent = shown + (shown === 1 ? " dish shown" : " dishes shown");
+        }
+
+        function toggleTheme() {
+          var dark = document.body.classList.toggle("dark");
+          themeButton.textContent = dark ? "Light theme" : "Dark theme";
+        }
+
+        form.addEventListener("submit", function (event) {
+          event.preventDefault();
+          filterDishes(word.value);
+        });
+        word.addEventListener("input", function () {
+          filterDishes(word.value);
+        });
+        themeButton.addEventListener("click", toggleTheme);
+        '''
+        os.makedirs("site", exist_ok=True)
+        for name, text in files.items():
+            with open(os.path.join("site", name), "w") as out:
+                out.write(text)
+
+        def md(text):
+            return {"cell_type": "markdown", "metadata": {}, "source": text}
+
+        def code(text):
+            return {"cell_type": "code", "metadata": {}, "source": text, "outputs": [],
+                    "execution_count": None}
+
+        cells = [
+            md("# Front-end web\n\nThe folder site/ holds a small page: index.html is its structure, "
+               "style.css its looks and app.js its behaviour. Edit them in JupyterLab's file editor, "
+               "save, and reload the Preview link on the lab's page. Run each cell with Shift and Enter."),
+            code("from html.parser import HTMLParser\n\nclass Tags(HTMLParser):\n    def __init__(self):\n        super().__init__()\n        self.names = []\n    def handle_starttag(self, tag, attrs):\n        self.names.append(tag)\n\nreader = Tags()\nreader.feed(open(\"site/index.html\").read())\nlen(reader.names), sorted(set(reader.names))"),
+            code("import tinycss2\n\nrules = tinycss2.parse_stylesheet(open(\"site/style.css\").read(), skip_whitespace=True, skip_comments=True)\n[tinycss2.serialize(rule.prelude).strip() for rule in rules]"),
+            code("import urllib.request\n\nanswer = urllib.request.urlopen(\"http://127.0.0.1:8000/\")\nanswer.status, answer.headers[\"Content-Type\"]"),
+            md("## Your own change\n\nEdit site/style.css, for example change --accent, save it, and reload the "
+               "Preview. Then add a cell below and count the rules again."),
+        ]
+        book = {"cells": cells, "nbformat": 4, "nbformat_minor": 5,
+                "metadata": {"kernelspec": {"name": "python3", "display_name": "Python 3 (ipykernel)",
+                                            "language": "python"},
+                             "language_info": {"name": "python"}}}
+        with open("start.ipynb", "w") as out:
+            json.dump(book, out, indent=1)
+
+        # Short scripts the lessons' Run buttons start from the terminal, one idea each. They read
+        # the files in site/ as they are now, so a page you edit changes what they print.
+        READ = 'from html.parser import HTMLParser\n\n'
+        steps = {
+            "tags.py": READ + r'''class Tags(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.counts = {}
+
+            def handle_starttag(self, tag, attrs):
+                self.counts[tag] = self.counts.get(tag, 0) + 1
+
+
+        reader = Tags()
+        reader.feed(open("site/index.html").read())
+        for tag in sorted(reader.counts):
+            print(tag, reader.counts[tag])
+        print("tags in all:", sum(reader.counts.values()))
+        ''',
+            "outline.py": READ + r'''class Outline(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.level = 0
+                self.found = []
+
+            def handle_starttag(self, tag, attrs):
+                if len(tag) == 2 and tag[0] == "h" and tag[1] in "123456":
+                    self.level = int(tag[1])
+                    self.found.append([self.level, ""])
+
+            def handle_endtag(self, tag):
+                self.level = 0
+
+            def handle_data(self, data):
+                if self.level:
+                    self.found[-1][1] += data
+
+
+        reader = Outline()
+        reader.feed(open("site/index.html").read())
+        for level, text in reader.found:
+            print("  " * (level - 1) + "h" + str(level), text)
+        ''',
+            "links.py": READ + r'''class Links(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.ids = []
+                self.links = []
+                self.open = None
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if "id" in attrs:
+                    self.ids.append(attrs["id"])
+                if tag == "a" and "href" in attrs:
+                    self.open = [attrs["href"], ""]
+                    self.links.append(self.open)
+
+            def handle_endtag(self, tag):
+                if tag == "a":
+                    self.open = None
+
+            def handle_data(self, data):
+                if self.open:
+                    self.open[1] += data
+
+
+        reader = Links()
+        reader.feed(open("site/index.html").read())
+        for href, text in reader.links:
+            if href.startswith("#"):
+                kind = "on this page, " + ("found" if href[1:] in reader.ids else "MISSING")
+            elif "://" in href:
+                kind = "another site"
+            else:
+                kind = "a file here"
+            print(text, "->", href, "(" + kind + ")")
+        ''',
+            "css.py": r'''import tinycss2
+
+        text = open("site/style.css").read()
+        rules = tinycss2.parse_stylesheet(text, skip_whitespace=True, skip_comments=True)
+        used = {}
+        total = 0
+        for rule in rules:
+            if rule.type != "qualified-rule":
+                continue
+            selector = tinycss2.serialize(rule.prelude).strip()
+            found = tinycss2.parse_declaration_list(rule.content, skip_whitespace=True, skip_comments=True)
+            names = [one.name for one in found if one.type == "declaration"]
+            total += len(names)
+            for name in names:
+                used[name] = used.get(name, 0) + 1
+            print(len(names), "declarations in", selector)
+        print("rules:", len([rule for rule in rules if rule.type == "qualified-rule"]))
+        print("declarations:", total)
+        top = sorted(used, key=lambda name: (-used[name], name))[:3]
+        print("most used:", ", ".join(name + " x" + str(used[name]) for name in top))
+        ''',
+            "js.py": r'''import re
+
+        text = open("site/app.js").read()
+        for name in re.findall(r"function\s+(\w+)", text):
+            print("function", name)
+        for kind in re.findall(r"addEventListener\(\"(\w+)\"", text):
+            print("listens for", kind)
+        for name in re.findall(r"getElementById\(\"([\w-]+)\"\)", text):
+            print("looks up id", name)
+        ''',
+            "sizes.py": r'''import os
+
+        total = 0
+        for name in ["index.html", "style.css", "app.js"]:
+            size = os.path.getsize(os.path.join("site", name))
+            total += size
+            print(name, size, "bytes")
+        print("total", total, "bytes")
+        ''',
+            "serve.py": r'''import re
+        import urllib.request
+
+        answer = urllib.request.urlopen("http://127.0.0.1:8000/")
+        page = answer.read().decode("utf-8")
+        print("status", answer.status)
+        print("title", re.search(r"<title>(.*?)</title>", page).group(1))
+        sheet = urllib.request.urlopen("http://127.0.0.1:8000/style.css")
+        print("style.css", sheet.status, sheet.headers["Content-Type"])
+        ''',
+        }
+        os.makedirs("steps", exist_ok=True)
+        for name, text in steps.items():
+            with open(os.path.join("steps", name), "w") as out:
+                out.write(text)
+        PY
+        cd /home/jovyan/work
+        python3 /tmp/lab/make.py
+        python3 -m http.server 8000 --bind 0.0.0.0 --directory /home/jovyan/work/site > /tmp/lab/preview.log 2>&1 &
+        exec jupyter lab --no-browser --ip=0.0.0.0 --port=8888 \
+          --ServerApp.root_dir=/home/jovyan/work \
+          --IdentityProvider.token= --ServerApp.password= \
+          '--ServerApp.allow_origin=*' --ServerApp.allow_remote_access=True \
+          --LabApp.check_for_updates_class=jupyterlab.NeverCheckForUpdate \
+          --LabApp.news_url=None
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8888/api', timeout=3); urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    labels:
+      lab.title: JupyterLab on the first link, Preview on the second
+      lab.open: "8888,8000"
